@@ -40,8 +40,7 @@ class MultiWorkerMirroredStrategyTest(tf.test.TestCase, parameterized.TestCase):
     def _model_fn():
       x = layers.Input(shape=(1,), name='input')
       y = layers.Dense(1, name='dense')(x)
-      model = training.Model(x, y)
-      return model
+      return training.Model(x, y)
 
     def _get_dataset():
       inputs = tf.expand_dims(

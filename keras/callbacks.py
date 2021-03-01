@@ -229,8 +229,8 @@ class CallbackList(object):
 
     # Performance check: Check batch hooks for slowness compared to batch time.
     # Only run check for custom callbacks (i.e. not present in this file).
-    self._check_timing = any([cbk.__class__.__name__ not in globals()
-                              for cbk in self.callbacks])
+    self._check_timing = any(
+        cbk.__class__.__name__ not in globals() for cbk in self.callbacks)
     self._num_batches_for_timing_check = 5
     self._hook_times = {}
     self._batch_start_time = None
@@ -1030,7 +1030,7 @@ class ProgbarLogger(Callback):
   def _maybe_init_progbar(self):
     if self.stateful_metrics is None:
       if self.model:
-        self.stateful_metrics = set(m.name for m in self.model.metrics)
+        self.stateful_metrics = {m.name for m in self.model.metrics}
       else:
         self.stateful_metrics = set()
 
@@ -1722,20 +1722,12 @@ class EarlyStopping(Callback):
                       'fallback to auto mode.', mode)
       mode = 'auto'
 
-    if mode == 'min':
-      self.monitor_op = np.less
-    elif mode == 'max':
+    if mode != 'min' and 'acc' in self.monitor or mode == 'max':
       self.monitor_op = np.greater
     else:
-      if 'acc' in self.monitor:
-        self.monitor_op = np.greater
-      else:
-        self.monitor_op = np.less
+      self.monitor_op = np.less
 
-    if self.monitor_op == np.greater:
-      self.min_delta *= 1
-    else:
-      self.min_delta *= -1
+    self.min_delta *= 1 if self.monitor_op == np.greater else -1
 
   def on_train_begin(self, logs=None):
     # Allow instances to be re-used
@@ -1827,16 +1819,12 @@ class RemoteMonitor(Callback):
     if requests is None:
       raise ImportError('RemoteMonitor requires the `requests` library.')
     logs = logs or {}
-    send = {}
-    send['epoch'] = epoch
+    send = {'epoch': epoch}
     for k, v in logs.items():
       # np.ndarray and np.generic are not scalar types
       # therefore we must unwrap their scalar values and
       # pass to the json-serializable dict 'send'
-      if isinstance(v, (np.ndarray, np.generic)):
-        send[k] = v.item()
-      else:
-        send[k] = v
+      send[k] = v.item() if isinstance(v, (np.ndarray, np.generic)) else v
     try:
       if self.send_as_json:
         requests.post(self.root + self.path, json=send, headers=self.headers)
@@ -2322,7 +2310,7 @@ class TensorBoard(Callback, version_utils.TensorBoardVersionSelector):
     self._is_tracing = False
 
     # Setting `profile_batch=0` disables profiling.
-    self._should_trace = not (self._start_batch == 0 and self._stop_batch == 0)
+    self._should_trace = self._start_batch != 0 or self._stop_batch != 0
 
   def on_train_begin(self, logs=None):
     self._global_train_batch = 0
@@ -2414,9 +2402,8 @@ class TensorBoard(Callback, version_utils.TensorBoardVersionSelector):
 
   def _compute_steps_per_second(self):
     current_iteration = self.model.optimizer.iterations.numpy()
-    steps_per_second = ((current_iteration - self._previous_epoch_iterations) /
+    return ((current_iteration - self._previous_epoch_iterations) /
                         (self._train_accumulated_time))
-    return steps_per_second
 
   def _log_epoch_metrics(self, epoch, logs):
     """Writes epoch metrics out as scalar summaries.
@@ -2777,15 +2764,13 @@ class LambdaCallback(Callback):
       self.on_batch_begin = on_batch_begin
     else:
       self.on_batch_begin = lambda batch, logs: None
-    if on_batch_end is not None:
-      self.on_batch_end = on_batch_end
-    else:
+    if on_batch_end is None:
       self.on_batch_end = lambda batch, logs: None
+    else:
+      self.on_batch_end = on_batch_end
     if on_train_begin is not None:
       self.on_train_begin = on_train_begin
     else:
       self.on_train_begin = lambda logs: None
-    if on_train_end is not None:
-      self.on_train_end = on_train_end
-    else:
-      self.on_train_end = lambda logs: None
+    self.on_train_end = ((lambda logs: None)
+                         if on_train_end is None else on_train_end)

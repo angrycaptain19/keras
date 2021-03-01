@@ -667,24 +667,22 @@ def _get_session(op_input_list=()):
   global _SESSION
   default_session = tf.compat.v1.get_default_session()
   if default_session is not None:
-    session = default_session
-  else:
-    if tf.inside_function():
-      raise RuntimeError('Cannot get session inside Tensorflow graph function.')
-    # If we don't have a session, or that session does not match the current
-    # graph, create and cache a new session.
-    if (getattr(_SESSION, 'session', None) is None or
-        _SESSION.session.graph is not _current_graph(op_input_list)):
-      # If we are creating the Session inside a tf.distribute.Strategy scope,
-      # we ask the strategy for the right session options to use.
-      if tf.distribute.has_strategy():
-        configure_and_create_distributed_session(
-            tf.distribute.get_strategy())
-      else:
-        _SESSION.session = tf.compat.v1.Session(
-            config=get_default_session_config())
-    session = _SESSION.session
-  return session
+    return default_session
+  if tf.inside_function():
+    raise RuntimeError('Cannot get session inside Tensorflow graph function.')
+  # If we don't have a session, or that session does not match the current
+  # graph, create and cache a new session.
+  if (getattr(_SESSION, 'session', None) is None or
+      _SESSION.session.graph is not _current_graph(op_input_list)):
+    # If we are creating the Session inside a tf.distribute.Strategy scope,
+    # we ask the strategy for the right session options to use.
+    if tf.distribute.has_strategy():
+      configure_and_create_distributed_session(
+          tf.distribute.get_strategy())
+    else:
+      _SESSION.session = tf.compat.v1.Session(
+          config=get_default_session_config())
+  return _SESSION.session
 
 
 @keras_export(v1=['keras.backend.get_session'])
@@ -726,13 +724,13 @@ tracking_util.register_session_provider(get_session)
 
 
 def get_graph():
-  if tf.executing_eagerly():
-    global _GRAPH
-    if not getattr(_GRAPH, 'graph', None):
-      _GRAPH.graph = tf.__internal__.FuncGraph('keras_graph')
-    return _GRAPH.graph
-  else:
+  if not tf.executing_eagerly():
     return tf.compat.v1.get_default_graph()
+
+  global _GRAPH
+  if not getattr(_GRAPH, 'graph', None):
+    _GRAPH.graph = tf.__internal__.FuncGraph('keras_graph')
+  return _GRAPH.graph
 
 
 @tf_contextlib.contextmanager
@@ -1121,19 +1119,13 @@ def unique_object_name(name,
   if name_uid_map is None:
     name_uid_map = get_default_graph_uid_map()
   if avoid_names is None:
-    if avoid_observed_names:
-      avoid_names = OBSERVED_NAMES
-    else:
-      avoid_names = set()
+    avoid_names = OBSERVED_NAMES if avoid_observed_names else set()
   proposed_name = None
   while proposed_name is None or proposed_name in avoid_names:
     name_key = (namespace, name)
     if zero_based:
       number = name_uid_map[name_key]
-      if number:
-        proposed_name = name + '_' + str(number)
-      else:
-        proposed_name = name
+      proposed_name = name + '_' + str(number) if number else name
       name_uid_map[name_key] += 1
     else:
       name_uid_map[name_key] += 1
@@ -1153,10 +1145,9 @@ def _get_variables(graph=None):
 def _initialize_variables(session):
   """Utility to initialize uninitialized variables on the fly."""
   variables = _get_variables(get_graph())
-  candidate_vars = []
-  for v in variables:
-    if not getattr(v, '_keras_initialized', False):
-      candidate_vars.append(v)
+  candidate_vars = [
+      v for v in variables if not getattr(v, '_keras_initialized', False)
+  ]
   if candidate_vars:
     # This step is expensive, so we only run it on variables not already
     # marked as initialized.
@@ -1361,11 +1352,10 @@ def is_placeholder(x):
     if keras_tensor.keras_tensors_enabled():
       return hasattr(x, '_is_backend_placeholder')
     from keras.utils import tf_utils  # pylint: disable=g-import-not-at-top
-    if tf_utils.is_extension_type(x):
-      flat_components = tf.nest.flatten(x, expand_composites=True)
-      return py_any(is_placeholder(c) for c in flat_components)
-    else:
+    if not tf_utils.is_extension_type(x):
       return x.op.type == 'Placeholder'
+    flat_components = tf.nest.flatten(x, expand_composites=True)
+    return py_any(is_placeholder(c) for c in flat_components)
   except AttributeError:
     return False
 
@@ -1951,33 +1941,29 @@ def dot(x, y):
   >>> tf.keras.backend.int_shape(xy)
   (2, 4, 5)
   """
-  if ndim(x) is not None and (ndim(x) > 2 or ndim(y) > 2):
-    x_shape = []
-    for i, s in zip(int_shape(x), tf.unstack(tf.compat.v1.shape(x))):
-      if i is not None:
-        x_shape.append(i)
-      else:
-        x_shape.append(s)
-    x_shape = tuple(x_shape)
-    y_shape = []
-    for i, s in zip(int_shape(y), tf.unstack(tf.compat.v1.shape(y))):
-      if i is not None:
-        y_shape.append(i)
-      else:
-        y_shape.append(s)
-    y_shape = tuple(y_shape)
-    y_permute_dim = list(range(ndim(y)))
-    y_permute_dim = [y_permute_dim.pop(-2)] + y_permute_dim
-    xt = tf.reshape(x, [-1, x_shape[-1]])
-    yt = tf.reshape(
-        tf.compat.v1.transpose(y, perm=y_permute_dim), [y_shape[-2], -1])
-    return tf.reshape(
-        tf.matmul(xt, yt), x_shape[:-1] + y_shape[:-2] + y_shape[-1:])
-  if is_sparse(x):
-    out = tf.sparse.sparse_dense_matmul(x, y)
-  else:
-    out = tf.matmul(x, y)
-  return out
+  if ndim(x) is None or ndim(x) <= 2 and ndim(y) <= 2:
+    return tf.sparse.sparse_dense_matmul(x, y) if is_sparse(x) else tf.matmul(x, y)
+  x_shape = []
+  for i, s in zip(int_shape(x), tf.unstack(tf.compat.v1.shape(x))):
+    if i is None:
+      x_shape.append(s)
+    else:
+      x_shape.append(i)
+  x_shape = tuple(x_shape)
+  y_shape = []
+  for i, s in zip(int_shape(y), tf.unstack(tf.compat.v1.shape(y))):
+    if i is None:
+      y_shape.append(s)
+    else:
+      y_shape.append(i)
+  y_shape = tuple(y_shape)
+  y_permute_dim = list(range(ndim(y)))
+  y_permute_dim = [y_permute_dim.pop(-2)] + y_permute_dim
+  xt = tf.reshape(x, [-1, x_shape[-1]])
+  yt = tf.reshape(
+      tf.compat.v1.transpose(y, perm=y_permute_dim), [y_shape[-2], -1])
+  return tf.reshape(
+      tf.matmul(xt, yt), x_shape[:-1] + y_shape[:-2] + y_shape[-1:])
 
 
 @keras_export('keras.backend.batch_dot')
@@ -2043,22 +2029,18 @@ def batch_dot(x, y, axes=None):
   x_batch_size = x_shape[0]
   y_batch_size = y_shape[0]
 
-  if x_batch_size is not None and y_batch_size is not None:
-    if x_batch_size != y_batch_size:
-      raise ValueError('Cannot do batch_dot on inputs '
-                       'with different batch sizes. '
-                       'Received inputs with shapes ' +
-                       str(x_shape) + ' and ' +
-                       str(y_shape) + '.')
+  if (x_batch_size is not None and y_batch_size is not None
+      and x_batch_size != y_batch_size):
+    raise ValueError('Cannot do batch_dot on inputs '
+                     'with different batch sizes. '
+                     'Received inputs with shapes ' +
+                     str(x_shape) + ' and ' +
+                     str(y_shape) + '.')
   if isinstance(axes, int):
     axes = [axes, axes]
 
   if axes is None:
-    if y_ndim == 2:
-      axes = [x_ndim - 1, y_ndim - 1]
-    else:
-      axes = [x_ndim - 1, y_ndim - 2]
-
+    axes = [x_ndim - 1, y_ndim - 1] if y_ndim == 2 else [x_ndim - 1, y_ndim - 2]
   if py_any(isinstance(a, (list, tuple)) for a in axes):
     raise ValueError('Multiple target dimensions are not supported. ' +
                      'Expected: None, int, (int, int), ' +
@@ -2654,10 +2636,9 @@ def clip(x, min_value, max_value):
   Returns:
       A tensor.
   """
-  if (isinstance(min_value, (int, float)) and
-      isinstance(max_value, (int, float))):
-    if max_value < min_value:
-      max_value = min_value
+  if (isinstance(min_value, (int, float))
+      and isinstance(max_value, (int, float))) and max_value < min_value:
+    max_value = min_value
   if min_value is None:
     min_value = -np.inf
   if max_value is None:
@@ -2885,15 +2866,8 @@ def _broadcast_normalize_batch_in_training(x,
 
   broadcast_mean = tf.reshape(mean, target_shape)
   broadcast_var = tf.reshape(var, target_shape)
-  if gamma is None:
-    broadcast_gamma = None
-  else:
-    broadcast_gamma = tf.reshape(gamma, target_shape)
-  if beta is None:
-    broadcast_beta = None
-  else:
-    broadcast_beta = tf.reshape(beta, target_shape)
-
+  broadcast_gamma = None if gamma is None else tf.reshape(gamma, target_shape)
+  broadcast_beta = None if beta is None else tf.reshape(beta, target_shape)
   normed = tf.nn.batch_normalization(x, broadcast_mean, broadcast_var,
                                   broadcast_beta, broadcast_gamma, epsilon)
   return normed, mean, var
@@ -2988,43 +2962,43 @@ def batch_normalization(x, mean, var, beta, gamma, axis=-1, epsilon=1e-3):
   Returns:
       A tensor.
   """
-  if ndim(x) == 4:
+  if ndim(x) != 4:
+    return tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
     # The CPU implementation of `fused_batch_norm` only supports NHWC
-    if axis == 1 or axis == -3:
-      tf_data_format = 'NCHW'
-    elif axis == 3 or axis == -1:
-      tf_data_format = 'NHWC'
-    else:
-      tf_data_format = None
+  if axis in [1, -3]:
+    tf_data_format = 'NCHW'
+  elif axis in [3, -1]:
+    tf_data_format = 'NHWC'
+  else:
+    tf_data_format = None
 
-    if (tf_data_format == 'NHWC' or
-        tf_data_format == 'NCHW' and _has_nchw_support()):
-      # The mean / var / beta / gamma tensors may be broadcasted
-      # so they may have extra axes of size 1, which should be squeezed.
-      if ndim(mean) > 1:
-        mean = tf.reshape(mean, [-1])
-      if ndim(var) > 1:
-        var = tf.reshape(var, [-1])
-      if beta is None:
-        beta = zeros_like(mean)
-      elif ndim(beta) > 1:
-        beta = tf.reshape(beta, [-1])
-      if gamma is None:
-        gamma = ones_like(mean)
-      elif ndim(gamma) > 1:
-        gamma = tf.reshape(gamma, [-1])
-    y, _, _ = tf.compat.v1.nn.fused_batch_norm(
-        x,
-        gamma,
-        beta,
-        epsilon=epsilon,
-        mean=mean,
-        variance=var,
-        data_format=tf_data_format,
-        is_training=False
-    )
-    return y
-  return tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
+  if (tf_data_format == 'NHWC' or
+      tf_data_format == 'NCHW' and _has_nchw_support()):
+    # The mean / var / beta / gamma tensors may be broadcasted
+    # so they may have extra axes of size 1, which should be squeezed.
+    if ndim(mean) > 1:
+      mean = tf.reshape(mean, [-1])
+    if ndim(var) > 1:
+      var = tf.reshape(var, [-1])
+    if beta is None:
+      beta = zeros_like(mean)
+    elif ndim(beta) > 1:
+      beta = tf.reshape(beta, [-1])
+    if gamma is None:
+      gamma = ones_like(mean)
+    elif ndim(gamma) > 1:
+      gamma = tf.reshape(gamma, [-1])
+  y, _, _ = tf.compat.v1.nn.fused_batch_norm(
+      x,
+      gamma,
+      beta,
+      epsilon=epsilon,
+      mean=mean,
+      variance=var,
+      data_format=tf_data_format,
+      is_training=False
+  )
+  return y
 
 
 # SHAPE OPERATIONS
@@ -6039,7 +6013,7 @@ def bias_add(x, bias, data_format=None):
   if data_format not in {'channels_first', 'channels_last'}:
     raise ValueError('Unknown data_format: ' + str(data_format))
   bias_shape = int_shape(bias)
-  if len(bias_shape) != 1 and len(bias_shape) != ndim(x) - 1:
+  if len(bias_shape) not in [1, ndim(x) - 1]:
     raise ValueError(
         'Unexpected bias dimensions %d, expect to be 1 or %d dimensions' %
         (len(bias_shape), ndim(x)))

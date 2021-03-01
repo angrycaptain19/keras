@@ -147,9 +147,9 @@ class Functional(training_lib.Model):
     else:
       self._enable_dict_to_input_mapping = False
 
-    if not keras_tensor.keras_tensors_enabled():
-      if any(not hasattr(tensor, '_keras_history') for tensor in self.outputs):
-        base_layer_utils.create_keras_history(self._nested_outputs)
+    if not keras_tensor.keras_tensors_enabled() and any(
+        not hasattr(tensor, '_keras_history') for tensor in self.outputs):
+      base_layer_utils.create_keras_history(self._nested_outputs)
 
     self._validate_graph_inputs_and_outputs()
 
@@ -271,18 +271,18 @@ class Functional(training_lib.Model):
       # Case where we have a nested structure.
       # In such a case we can't safely run any checks.
       return None
-    if isinstance(self._nested_inputs, dict):
-      # Case where `_nested_inputs` is a plain dict of Inputs.
-      names = sorted(self._nested_inputs.keys())
-      return [input_spec.InputSpec(
-          shape=shape_with_no_batch_size(self._nested_inputs[name]),
-          allow_last_axis_squeeze=True, name=name) for name in names]
-    else:
+    if not isinstance(self._nested_inputs, dict):
       # Single input, or list / tuple of inputs.
       # The data may be passed as a dict keyed by input name.
       return [input_spec.InputSpec(
           shape=shape_with_no_batch_size(x), allow_last_axis_squeeze=True,
           name=x._keras_history.layer.name) for x in self.inputs]
+
+    # Case where `_nested_inputs` is a plain dict of Inputs.
+    names = sorted(self._nested_inputs.keys())
+    return [input_spec.InputSpec(
+        shape=shape_with_no_batch_size(self._nested_inputs[name]),
+        allow_last_axis_squeeze=True, name=name) for name in names]
 
   @input_spec.setter
   def input_spec(self, value):
@@ -819,7 +819,7 @@ class Functional(training_lib.Model):
     no-longer-needed tensors as early as possible.
     """
     tensor_usage_count = collections.Counter()
-    available_tensors = set(str(id(tensor)) for tensor in self.inputs)
+    available_tensors = {str(id(tensor)) for tensor in self.inputs}
 
     depth_keys = list(self._nodes_by_depth.keys())
     depth_keys.sort(reverse=True)
@@ -973,10 +973,7 @@ def _map_graph_network(inputs, outputs):
   # Check that all tensors required are computable.
   # computable_tensors: all tensors in the graph
   # that can be computed from the inputs provided.
-  computable_tensors = set()
-  for x in inputs:
-    computable_tensors.add(id(x))
-
+  computable_tensors = {id(x) for x in inputs}
   layers_with_complete_input = []  # To provide a better error msg.
   for depth in depth_keys:
     for node in nodes_by_depth[depth]:
@@ -1162,27 +1159,27 @@ def reconstruct_from_config(config, custom_objects=None, created_layers=None):
 
     def _deserialize_keras_tensor(t):
       """Deserializes a single Keras Tensor passed to `call`."""
-      if isinstance(t, tf_utils.ListWrapper):
-        t = t.as_list()
-        layer_name = t[0]
-        node_index = t[1]
-        tensor_index = t[2]
+      if not isinstance(t, tf_utils.ListWrapper):
+        return t
+      t = t.as_list()
+      layer_name = t[0]
+      node_index = t[1]
+      tensor_index = t[2]
 
-        layer = layer_map[layer_name]
-        new_node_index = get_node_index(layer, node_index)
-        if new_node_index is None:
-          # The inbound node may not have been processed yet,
-          # (This can happen e.g. if it depends on a different set
-          # of inputs than those that have been processed already).
-          # raise an IndexError so that the current node puts itself
-          # back on the unprocessed queue.
-          # Caution: This may lead to infinite loops for malformed
-          # network configurations! (or when there is a bug in
-          # the network config loading code).
-          raise IndexError
-        node = layer._inbound_nodes[new_node_index]
-        return tf.nest.flatten(node.outputs)[tensor_index]
-      return t
+      layer = layer_map[layer_name]
+      new_node_index = get_node_index(layer, node_index)
+      if new_node_index is None:
+        # The inbound node may not have been processed yet,
+        # (This can happen e.g. if it depends on a different set
+        # of inputs than those that have been processed already).
+        # raise an IndexError so that the current node puts itself
+        # back on the unprocessed queue.
+        # Caution: This may lead to infinite loops for malformed
+        # network configurations! (or when there is a bug in
+        # the network config loading code).
+        raise IndexError
+      node = layer._inbound_nodes[new_node_index]
+      return tf.nest.flatten(node.outputs)[tensor_index]
 
     kwargs = tf_utils.convert_inner_node_data(kwargs, wrap=True)
     return tf.nest.map_structure(_deserialize_keras_tensor, kwargs)

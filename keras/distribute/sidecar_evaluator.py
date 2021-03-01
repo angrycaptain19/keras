@@ -206,11 +206,11 @@ class SidecarEvaluator(object):
       self.model.evaluate(self.data, steps=self.steps)
 
       logging.info(
-          'End of evaluation. Metrics: %s', ' '.join([
-              '{}={}'.format(metric.name,
-                             metric.result().numpy())
-              for metric in self.model.metrics
-          ]))
+          'End of evaluation. Metrics: %s',
+          ' '.join('{}={}'.format(metric.name,
+                                  metric.result().numpy())
+                   for metric in self.model.metrics),
+      )
 
       if self._summary_writer:
         with tf.summary.record_if(True), self._summary_writer.as_default():

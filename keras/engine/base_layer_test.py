@@ -976,8 +976,8 @@ class SymbolicSupportTest(keras_parameterized.TestCase):
     # layers that have an `input_spec` will raise an error when called on
     # non-tensors. This covers all built-in layers.
     layer = layers.Dense(3)
-    x = object()
     with self.assertRaisesRegex(TypeError, r'should be tensors'):
+      x = object()
       layer(x)
 
 
@@ -1260,10 +1260,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
     class MyLayer(base_layer.Layer):
 
       def call(self, inputs, training=None):
-        if training:
-          loss = tf.reduce_sum(inputs)
-        else:
-          loss = 0.
+        loss = tf.reduce_sum(inputs) if training else 0.
         self.add_loss(loss)
         return inputs
 
@@ -1284,10 +1281,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
     class MyLayer(base_layer.Layer):
 
       def call(self, inputs, training=None):
-        if training:
-          metric = tf.reduce_sum(inputs)
-        else:
-          metric = 0.
+        metric = tf.reduce_sum(inputs) if training else 0.
         self.add_metric(metric, name='my_metric', aggregation='mean')
         return inputs
 
@@ -1316,10 +1310,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
             shape=(), trainable=False, initializer='zeros')
 
       def call(self, inputs, training=None):
-        if training:
-          increment = 1.
-        else:
-          increment = 0.
+        increment = 1. if training else 0.
         self.counter.assign_add(increment)
         return inputs
 

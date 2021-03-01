@@ -55,10 +55,10 @@ class CombinerPreprocessingLayer(
 
   def _restore_updates(self):
     """Recreates a dict of updates from the layer's weights."""
-    data_dict = {}
-    for name, var in self.state_variables.items():
-      data_dict[name] = K.get_session().run(var)
-    return data_dict
+    return {
+        name: K.get_session().run(var)
+        for name, var in self.state_variables.items()
+    }
 
   def _get_dataset_iterator(self, dataset):
     """Gets an iterator from a tf.data.Dataset."""
@@ -74,10 +74,10 @@ class CombinerPreprocessingLayer(
     if not self.built:
       raise RuntimeError('_set_state_variables() must be called after build().')
 
-    assignments = []
-    for var_name, value in updates.items():
-      assignments.append(
-          tf.compat.v1.assign(self.state_variables[var_name], value))
+    assignments = [
+        tf.compat.v1.assign(self.state_variables[var_name], value)
+        for var_name, value in updates.items()
+    ]
     K.get_session().run(assignments)
 
   def adapt(self, data, reset_state=True):

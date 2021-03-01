@@ -260,10 +260,10 @@ class KerasCallbacksTest(keras_parameterized.TestCase):
     x = tf.ones((200, 3))
     y = tf.zeros((200, 2))
     dataset = tf.data.Dataset.from_tensor_slices((x, y)).batch(10)
-    expected_log = r'(.*- loss:.*- my_acc:.*)+'
-
     with self.captureWritesToStream(sys.stdout) as printed:
       model.fit(dataset, epochs=2, steps_per_epoch=10)
+      expected_log = r'(.*- loss:.*- my_acc:.*)+'
+
       self.assertRegex(printed.contents(), expected_log)
 
   @keras_parameterized.run_all_keras_modes
@@ -329,10 +329,10 @@ class KerasCallbacksTest(keras_parameterized.TestCase):
     x = tf.ones((200, 3))
     y = tf.zeros((200, 2))
     dataset = tf.data.Dataset.from_tensor_slices((x, y)).batch(10)
-    expected_log = r'(.*- loss:.*- my_acc:.*)+'
-
     with self.captureWritesToStream(sys.stdout) as printed:
       model.fit(dataset, epochs=2, steps_per_epoch=10)
+      expected_log = r'(.*- loss:.*- my_acc:.*)+'
+
       self.assertRegex(printed.contents(), expected_log)
 
   @keras_parameterized.run_with_all_model_types
@@ -344,10 +344,10 @@ class KerasCallbacksTest(keras_parameterized.TestCase):
     y = tf.zeros((50, 2))
     training_dataset = tf.data.Dataset.from_tensor_slices((x, y)).batch(10)
     val_dataset = tf.data.Dataset.from_tensor_slices((x, y)).batch(10)
-    expected_log = r'(.*5/5.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:.*)+'
-
     with self.captureWritesToStream(sys.stdout) as printed:
       model.fit(training_dataset, epochs=2, validation_data=val_dataset)
+      expected_log = r'(.*5/5.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:.*)+'
+
       self.assertRegex(printed.contents(), expected_log)
 
   @keras_parameterized.run_with_all_model_types
@@ -357,12 +357,12 @@ class KerasCallbacksTest(keras_parameterized.TestCase):
 
     x = np.ones((100, 3))
     y = np.zeros((100, 2))
-    expected_log = (
-        r'(?s).*1/2.*8/8.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:'
-        r'.*2/2.*8/8.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:.*')
-
     with self.captureWritesToStream(sys.stdout) as printed:
       model.fit(x, y, batch_size=10, epochs=2, validation_split=0.2)
+      expected_log = (
+          r'(?s).*1/2.*8/8.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:'
+          r'.*2/2.*8/8.*- loss:.*- my_acc:.*- val_loss:.*- val_my_acc:.*')
+
       self.assertRegex(printed.contents(), expected_log)
 
   @keras_parameterized.run_with_all_model_types
@@ -1011,8 +1011,8 @@ class KerasCallbacksTest(keras_parameterized.TestCase):
           ('auto', 'loss'),
           ('unknown', 'unknown')
       ]
+      patience = 0
       for mode, monitor in cases:
-        patience = 0
         cbks = [
             keras.callbacks.EarlyStopping(
                 patience=patience, monitor=monitor, mode=mode)
@@ -1988,10 +1988,11 @@ class TestTensorBoardV2(keras_parameterized.TestCase):
         epochs=2,
         callbacks=[tb_cbk])
 
-    events_file_run_basenames = set()
-    for (dirpath, _, filenames) in os.walk(self.logdir):
-      if any(fn.startswith('events.out.') for fn in filenames):
-        events_file_run_basenames.add(os.path.basename(dirpath))
+    events_file_run_basenames = {
+        os.path.basename(dirpath)
+        for (dirpath, _, filenames) in os.walk(self.logdir) if any(
+            fn.startswith('events.out.') for fn in filenames)
+    }
     self.assertEqual(events_file_run_basenames, {'train'})
 
   def test_TensorBoard_batch_metrics(self):
@@ -2599,10 +2600,12 @@ class MostRecentlyModifiedFileMatchingPatternTest(tf.test.TestCase):
         f.write('foo bar')
     # Ensure the files have been actually written.
     self.assertEqual(
-        set([
+        {
             os.path.join(test_dir, file_name)
             for file_name in os.listdir(test_dir)
-        ]), set(file_paths))
+        },
+        set(file_paths),
+    )
     self.assertEqual(
         keras.callbacks.ModelCheckpoint(None)
         ._get_most_recently_modified_file_matching_pattern(path_pattern),

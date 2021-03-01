@@ -162,8 +162,8 @@ def measure_performance(model_fn,
   strategy = distribution_util.get_distribution_strategy(
       distribution_strategy=distribution_strategy, num_gpus=num_gpus)
 
+  timer = timeit.default_timer
   for _ in range(run_iters):
-    timer = timeit.default_timer
     start_time = timer()
     # Init the distribution strategy scope for each iteration.
     strategy_scope = distribution_util.get_strategy_scope(strategy)

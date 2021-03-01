@@ -273,9 +273,10 @@ class TensorLikeDataAdapterTest(DataAdapterTestBase):
         x, y=None, batch_size=batch_size, shuffle=True, epochs=2)
 
     def _get_epoch(ds_iter):
-      ds_data = []
-      for _ in range(int(math.ceil(num_samples / batch_size))):
-        ds_data.append(next(ds_iter).numpy())
+      ds_data = [
+          next(ds_iter).numpy()
+          for _ in range(int(math.ceil(num_samples / batch_size)))
+      ]
       return np.concatenate(ds_data)
 
     ds_iter = iter(adapter.get_dataset())
@@ -306,10 +307,10 @@ class TensorLikeDataAdapterTest(DataAdapterTestBase):
         x, y=None, batch_size=batch_size, shuffle='batch', epochs=2)
 
     def _get_epoch_batches(ds_iter):
-      ds_data = []
-      for _ in range(int(math.ceil(num_samples / batch_size))):
-        ds_data.append(next(ds_iter)[0].numpy())
-      return ds_data
+      return [
+          next(ds_iter)[0].numpy()
+          for _ in range(int(math.ceil(num_samples / batch_size)))
+      ]
 
     ds_iter = iter(adapter.get_dataset())
 
@@ -504,9 +505,10 @@ class GenericArrayLikeDataAdapterTest(DataAdapterTestBase):
         x, y=None, batch_size=batch_size, shuffle=True, epochs=2)
 
     def _get_epoch(ds_iter):
-      ds_data = []
-      for _ in range(int(math.ceil(num_samples / batch_size))):
-        ds_data.append(next(ds_iter).numpy())
+      ds_data = [
+          next(ds_iter).numpy()
+          for _ in range(int(math.ceil(num_samples / batch_size)))
+      ]
       return np.concatenate(ds_data)
 
     ds_iter = iter(adapter.get_dataset())
@@ -537,10 +539,10 @@ class GenericArrayLikeDataAdapterTest(DataAdapterTestBase):
         x, y=None, batch_size=batch_size, shuffle='batch', epochs=2)
 
     def _get_epoch_batches(ds_iter):
-      ds_data = []
-      for _ in range(int(math.ceil(num_samples / batch_size))):
-        ds_data.append(next(ds_iter)[0].numpy())
-      return ds_data
+      return [
+          next(ds_iter)[0].numpy()
+          for _ in range(int(math.ceil(num_samples / batch_size)))
+      ]
 
     ds_iter = iter(adapter.get_dataset())
 
@@ -793,9 +795,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
     self.assertFalse(data_handler._adapter.should_recreate_iterator())
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator).numpy())
+      epoch_data = [next(iterator).numpy() for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     self.assertEqual(returned_data, [[0, 1], [2, 3]])
 
@@ -805,9 +805,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
     self.assertEqual(data_handler.inferred_steps, 3)
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator).numpy())
+      epoch_data = [next(iterator).numpy() for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     self.assertEqual(returned_data, [[0, 1, 2], [0, 1, 2]])
 
@@ -820,9 +818,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
     self.assertTrue(data_handler._adapter.should_recreate_iterator())
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator).numpy())
+      epoch_data = [next(iterator).numpy() for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     self.assertEqual(returned_data, [[0, 1, 2, 3], [0, 1, 2, 3]])
 
@@ -832,9 +828,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
         data, initial_epoch=0, epochs=2, steps_per_epoch=3)
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator).numpy())
+      epoch_data = [next(iterator).numpy() for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     self.assertEqual(returned_data, [[0, 1, 2], [0, 1, 2]])
 
@@ -850,9 +844,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
     self.assertFalse(data_handler._adapter.should_recreate_iterator())
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator))
+      epoch_data = [next(iterator) for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     returned_data = self.evaluate(returned_data)
     self.assertEqual(returned_data, [[0, 1], [2, 3]])
@@ -903,9 +895,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
         x=x, y=y, sample_weight=sw, batch_size=1, epochs=2)
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator))
+      epoch_data = [next(iterator) for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     returned_data = self.evaluate(returned_data)
     self.assertEqual(returned_data,
@@ -937,9 +927,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
     data_handler = data_adapter.DataHandler(st, epochs=2, steps_per_epoch=3)
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator))
+      epoch_data = [next(iterator) for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     returned_data = self.evaluate(
         tf.nest.map_structure(tf.sparse.to_dense, returned_data))
@@ -971,9 +959,7 @@ class DataHandlerTest(keras_parameterized.TestCase):
                                             steps_per_epoch=3)
     returned_data = []
     for _, iterator in data_handler.enumerate_epochs():
-      epoch_data = []
-      for _ in data_handler.steps():
-        epoch_data.append(next(iterator))
+      epoch_data = [next(iterator) for _ in data_handler.steps()]
       returned_data.append(epoch_data)
     returned_data = self.evaluate(returned_data)
     self.assertEqual(returned_data, [[([0],), ([1],),

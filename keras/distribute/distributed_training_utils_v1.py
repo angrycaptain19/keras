@@ -237,24 +237,24 @@ def validate_callbacks(input_callbacks, optimizer):
   """
   if input_callbacks:
     for callback in input_callbacks:
-      if isinstance(callback, (callbacks.LearningRateScheduler,
-                               callbacks.ReduceLROnPlateau)):
-
-        if not isinstance(optimizer, optimizer_v2.OptimizerV2):
-          raise ValueError('You must specify a Keras Optimizer V2 when using '
-                           '%s callback with DistributionStrategy.' % callback)
+      if isinstance(
+          callback,
+          (callbacks.LearningRateScheduler, callbacks.ReduceLROnPlateau),
+      ) and not isinstance(optimizer, optimizer_v2.OptimizerV2):
+        raise ValueError('You must specify a Keras Optimizer V2 when using '
+                         '%s callback with DistributionStrategy.' % callback)
 
       # If users want to use the TensorBoard callback they cannot use certain
       # features of the callback that involve accessing model attributes and
       # running ops.
-      if isinstance(callback, callbacks.TensorBoard):
-        if getattr(callback, 'write_grads', False):
-          logging.warning(
-              UserWarning(
-                  '`write_grads` in the TensorBoard callback is not supported '
-                  'when using DistributionStrategy. Setting `write_grads` '
-                  'to `False`.'))
-          callback.write_grads = False
+      if isinstance(callback, callbacks.TensorBoard) and getattr(
+          callback, 'write_grads', False):
+        logging.warning(
+            UserWarning(
+                '`write_grads` in the TensorBoard callback is not supported '
+                'when using DistributionStrategy. Setting `write_grads` '
+                'to `False`.'))
+        callback.write_grads = False
 
 
 def validate_distributed_dataset_inputs(distribution_strategy, x, y,
@@ -364,11 +364,9 @@ def validate_all_tensor_shapes(x, x_values):
 def _wait_for_variable_initialization(session):
   """Utility to wait for variables to be initialized."""
   all_variables = K._get_variables(K.get_graph())  # pylint: disable=protected-access
-  candidate_vars = []
-  for v in all_variables:
-    if not getattr(v, '_keras_initialized', False):
-      candidate_vars.append(v)
-
+  candidate_vars = [
+      v for v in all_variables if not getattr(v, '_keras_initialized', False)
+  ]
   if not candidate_vars:
     return
 
@@ -483,10 +481,9 @@ def get_input_params(distribution_strategy,
         mode != ModeKeys.TRAIN or
         not K.is_tpu_strategy(distribution_strategy))
   else:
-    allow_partial_batch = (
-        mode == ModeKeys.TRAIN or
-        ((mode == ModeKeys.PREDICT or mode == ModeKeys.TEST) and
-         K.is_tpu_strategy(distribution_strategy)))
+    allow_partial_batch = (mode == ModeKeys.TRAIN
+                           or mode in [ModeKeys.PREDICT, ModeKeys.TEST]
+                           and K.is_tpu_strategy(distribution_strategy))
 
   if steps is None:
     if batch_size is None:
@@ -608,9 +605,8 @@ def _prepare_feed_values(model, inputs, targets, sample_weights, mode):
   """
   strategy = model._distribution_strategy
   inputs, targets, sample_weights = _get_input_from_iterator(inputs, model)
-  if K.is_tpu_strategy(strategy):
-    if sample_weights is not None:
-      raise ValueError('TPUStrategy does not support sample weights.')
+  if K.is_tpu_strategy(strategy) and sample_weights is not None:
+    raise ValueError('TPUStrategy does not support sample weights.')
 
   # When the inputs are dict, then we want to flatten it in the same order as
   # the input layers, such that the data are fed into the input layers in the
@@ -1065,8 +1061,7 @@ def set_distributed_function(model, mode, distributed_function):
 
 
 def _generate_cache_key(mode):
-  key = hash(mode)
-  return key
+  return hash(mode)
 
 
 @tf_contextlib.contextmanager
@@ -1121,7 +1116,7 @@ def _update_sample_weight_modes(model, mode, sample_weights):
       _make_replicated_models_with_cloning(model, mode)
       distributed_model = get_distributed_model(model, mode)
     distributed_model._recompile_exec_function = any(
-        [e.sample_weights_mismatch() for e in model._training_endpoints])
+        e.sample_weights_mismatch() for e in model._training_endpoints)
 
     if sample_weights:
       distributed_models = flatten_per_replica_values(
@@ -1129,9 +1124,9 @@ def _update_sample_weight_modes(model, mode, sample_weights):
       # sample_weights is a tuple of 1 list where the number of elements in the
       # list is equal to the number of replicas in sync.
       sample_weights = sample_weights[0]
-      if sample_weights and None not in sample_weights:
-        for m, sw in zip(distributed_models, sample_weights):
-          m._update_sample_weight_modes(sample_weights=[sw])
+    if sample_weights and None not in sample_weights:
+      for m, sw in zip(distributed_models, sample_weights):
+        m._update_sample_weight_modes(sample_weights=[sw])
 
 
 def concat_along_batch_dimension(outputs):

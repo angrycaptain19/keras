@@ -176,10 +176,7 @@ def MobileNetV2(input_shape=None,
       using a pretrained top layer.
   """
   global layers
-  if 'layers' in kwargs:
-    layers = kwargs.pop('layers')
-  else:
-    layers = VersionAwareLayers()
+  layers = kwargs.pop('layers') if 'layers' in kwargs else VersionAwareLayers()
   if kwargs:
     raise ValueError('Unknown argument(s): %s' % (kwargs,))
   if not (weights in {'imagenet', None} or tf.io.gfile.exists(weights)):
@@ -356,11 +353,7 @@ def MobileNetV2(input_shape=None,
   # no alpha applied to last conv as stated in the paper:
   # if the width multiplier is greater than 1 we
   # increase the number of output channels
-  if alpha > 1.0:
-    last_block_filters = _make_divisible(1280 * alpha, 8)
-  else:
-    last_block_filters = 1280
-
+  last_block_filters = _make_divisible(1280 * alpha, 8) if alpha > 1.0 else 1280
   x = layers.Conv2D(
       last_block_filters, kernel_size=1, use_bias=False, name='Conv_1')(
           x)
@@ -396,15 +389,12 @@ def MobileNetV2(input_shape=None,
     if include_top:
       model_name = ('mobilenet_v2_weights_tf_dim_ordering_tf_kernels_' +
                     str(alpha) + '_' + str(rows) + '.h5')
-      weight_path = BASE_WEIGHT_PATH + model_name
-      weights_path = data_utils.get_file(
-          model_name, weight_path, cache_subdir='models')
     else:
       model_name = ('mobilenet_v2_weights_tf_dim_ordering_tf_kernels_' +
                     str(alpha) + '_' + str(rows) + '_no_top' + '.h5')
-      weight_path = BASE_WEIGHT_PATH + model_name
-      weights_path = data_utils.get_file(
-          model_name, weight_path, cache_subdir='models')
+    weight_path = BASE_WEIGHT_PATH + model_name
+    weights_path = data_utils.get_file(
+        model_name, weight_path, cache_subdir='models')
     model.load_weights(weights_path)
   elif weights is not None:
     model.load_weights(weights)

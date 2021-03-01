@@ -571,9 +571,7 @@ class _SubclassModelCustomBuild(models.Model):
     self._layer_generating_func = layer_generating_func
 
   def build(self, input_shape):
-    model_layers = []
-    for layer in self._layer_generating_func():
-      model_layers.append(layer)
+    model_layers = [layer for layer in self._layer_generating_func()]
     self.all_layers = model_layers
 
   def call(self, inputs, **kwargs):
@@ -1089,11 +1087,10 @@ def generate_combinations_with_testcase_name(**kwargs):
   named_combinations = []
   for combination in combinations:
     assert isinstance(combination, collections.OrderedDict)
-    name = ''.join([
-        '_{}_{}'.format(''.join(filter(str.isalnum, key)),
-                        ''.join(filter(str.isalnum, str(value))))
-        for key, value in combination.items()
-    ])
+    name = ''.join('_{}_{}'.format(
+        ''.join(filter(str.isalnum, key)),
+        ''.join(filter(str.isalnum, str(value))),
+    ) for key, value in combination.items())
     named_combinations.append(
         collections.OrderedDict(
             list(combination.items()) +

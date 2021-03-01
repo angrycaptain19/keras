@@ -218,11 +218,8 @@ class Layer(base_layer.Layer):
       # to insert before the current layer
       if 'batch_input_shape' in kwargs:
         batch_input_shape = tuple(kwargs['batch_input_shape'])
-      elif 'input_shape' in kwargs:
-        if 'batch_size' in kwargs:
-          batch_size = kwargs['batch_size']
-        else:
-          batch_size = None
+      else:
+        batch_size = kwargs['batch_size'] if 'batch_size' in kwargs else None
         batch_input_shape = (batch_size,) + tuple(kwargs['input_shape'])
       self._batch_input_shape = batch_input_shape
 
@@ -1578,8 +1575,7 @@ class Layer(base_layer.Layer):
     if not self._inbound_nodes:
       raise AttributeError('The layer has never been called '
                            'and thus has no defined input shape.')
-    all_input_shapes = set(
-        [str(node.input_shapes) for node in self._inbound_nodes])
+    all_input_shapes = {str(node.input_shapes) for node in self._inbound_nodes}
     if len(all_input_shapes) == 1:
       return self._inbound_nodes[0].input_shapes
     else:
@@ -1630,8 +1626,7 @@ class Layer(base_layer.Layer):
     if not self._inbound_nodes:
       raise AttributeError('The layer has never been called '
                            'and thus has no defined output shape.')
-    all_output_shapes = set(
-        [str(node.output_shapes) for node in self._inbound_nodes])
+    all_output_shapes = {str(node.output_shapes) for node in self._inbound_nodes}
     if len(all_output_shapes) == 1:
       return self._inbound_nodes[0].output_shapes
     else:
@@ -1970,9 +1965,7 @@ class Layer(base_layer.Layer):
     if not inputs_in_args:
       # Ignore `inputs` arg.
       call_fn_args = call_fn_args[1:]
-    if arg_name in dict(zip(call_fn_args, args)):
-      return True
-    return False
+    return arg_name in dict(zip(call_fn_args, args))
 
   def _get_call_arg_value(self, arg_name, args, kwargs, inputs_in_args=False):
     if arg_name in kwargs:
@@ -2213,7 +2206,7 @@ class Layer(base_layer.Layer):
       self._maybe_create_attribute('_self_tracked_trackables', [])
       # We need to check object identity to avoid de-duplicating empty
       # container types which compare equal.
-      if not any((layer is value for layer in self._self_tracked_trackables)):
+      if all(layer is not value for layer in self._self_tracked_trackables):
         self._self_tracked_trackables.append(value)
         if hasattr(value, '_use_resource_variables'):
           # Legacy layers (V1 tf.layers) must always use
@@ -2283,10 +2276,7 @@ class Layer(base_layer.Layer):
   @property
   @layer_utils.cached_per_instance
   def _call_fn_arg_positions(self):
-    call_fn_arg_positions = dict()
-    for pos, arg in enumerate(self._call_fn_args):
-      call_fn_arg_positions[arg] = pos
-    return call_fn_arg_positions
+    return {arg: pos for pos, arg in enumerate(self._call_fn_args)}
 
   @property
   @layer_utils.cached_per_instance

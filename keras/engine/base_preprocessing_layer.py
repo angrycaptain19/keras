@@ -242,24 +242,26 @@ class PreprocessingLayer(Layer):
 
   # TODO(omalleyt): Unify this logic with `Layer._maybe_build`.
   def _adapt_maybe_build(self, data):
-    if not self.built:
-      try:
-        # If this is a Numpy array or tensor, we can get shape from .shape.
-        # If not, an attribute error will be thrown.
-        data_shape = data.shape
-        data_shape_nones = tuple([None] * len(data.shape))
-      except AttributeError:
-        # The input has an unknown number of dimensions.
-        data_shape = None
-        data_shape_nones = None
+    if self.built:
+      return
 
-      # TODO (b/159261555): move this to base layer build.
-      batch_input_shape = getattr(self, '_batch_input_shape', None)
-      if batch_input_shape is None:
-        # Set the number of dimensions.
-        self._batch_input_shape = data_shape_nones
-      self.build(data_shape)
-      self.built = True
+    try:
+      # If this is a Numpy array or tensor, we can get shape from .shape.
+      # If not, an attribute error will be thrown.
+      data_shape = data.shape
+      data_shape_nones = tuple([None] * len(data.shape))
+    except AttributeError:
+      # The input has an unknown number of dimensions.
+      data_shape = None
+      data_shape_nones = None
+
+    # TODO (b/159261555): move this to base layer build.
+    batch_input_shape = getattr(self, '_batch_input_shape', None)
+    if batch_input_shape is None:
+      # Set the number of dimensions.
+      self._batch_input_shape = data_shape_nones
+    self.build(data_shape)
+    self.built = True
 
 
 # TODO(omalleyt): This class will be gradually replaced.
@@ -352,10 +354,7 @@ class CombinerPreprocessingLayer(PreprocessingLayer):
 
   def _restore_updates(self):
     """Recreates a dict of updates from the layer's weights."""
-    data_dict = {}
-    for name, var in self.state_variables.items():
-      data_dict[name] = var.numpy()
-    return data_dict
+    return {name: var.numpy() for name, var in self.state_variables.items()}
 
   def _get_accumulator(self):
     if self._is_adapted:
