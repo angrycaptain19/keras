@@ -92,10 +92,7 @@ class SimpleBiasTest(keras_parameterized.TestCase):
 class MultipleInputTest(keras_parameterized.TestCase):
 
   def _get_multiple_input_model(self, subclassed=True):
-    if subclassed:
-      model = MultiInputSubclassed()
-    else:
-      model = multi_input_functional()
+    model = MultiInputSubclassed() if subclassed else multi_input_functional()
     model.compile(
         keras.optimizer_v2.gradient_descent.SGD(0.1),
         'mae',

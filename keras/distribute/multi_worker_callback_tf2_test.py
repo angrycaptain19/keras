@@ -60,9 +60,9 @@ def _model_setup(test_obj, file_format):
     A tuple of (model, saving_filepath, train_ds, steps) where train_ds is
     the training dataset.
   """
-  batch_size = 64
   steps = 2
   with tf.distribute.MultiWorkerMirroredStrategy().scope():
+    batch_size = 64
     # TODO(b/142509827): In rare cases this errors out at C++ level with the
     # "Connect failed" error message.
     train_ds, _ = multi_worker_testing_utils.mnist_synthetic_dataset(

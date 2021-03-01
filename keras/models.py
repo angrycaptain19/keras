@@ -465,7 +465,7 @@ def _in_place_subclassed_model_reset(model):
   attributes_cache = {}
   for name in dir(model):
     # Skip attrs that track other trackables.
-    if name == 'submodules' or name == '_self_tracked_trackables':
+    if name in ['submodules', '_self_tracked_trackables']:
       continue
 
     try:
@@ -512,25 +512,24 @@ def _in_place_subclassed_model_reset(model):
     model._self_tracked_trackables.append(fresh_layer)
 
   # Cache original model build attributes (in addition to layers)
-  if (not hasattr(model, '_original_attributes_cache') or
-      model._original_attributes_cache is None):
-    if model.built:
-      attributes_to_cache = [
-          'inputs',
-          'outputs',
-          'total_loss',
-          'optimizer',
-          'train_function',
-          'test_function',
-          'predict_function',
-          '_training_endpoints',
-          '_collected_trainable_weights',
-          '_feed_inputs',
-          '_feed_input_names',
-          '_feed_input_shapes',
-      ]
-      for name in attributes_to_cache:
-        attributes_cache[name] = getattr(model, name)
+  if ((not hasattr(model, '_original_attributes_cache')
+       or model._original_attributes_cache is None)) and model.built:
+    attributes_to_cache = [
+        'inputs',
+        'outputs',
+        'total_loss',
+        'optimizer',
+        'train_function',
+        'test_function',
+        'predict_function',
+        '_training_endpoints',
+        '_collected_trainable_weights',
+        '_feed_inputs',
+        '_feed_input_names',
+        '_feed_input_shapes',
+    ]
+    for name in attributes_to_cache:
+      attributes_cache[name] = getattr(model, name)
   model._original_attributes_cache = attributes_cache
   _reset_build_compile_trackers(model)
   model._setattr_tracking = setattr_tracking

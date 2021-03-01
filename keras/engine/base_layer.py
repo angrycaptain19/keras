@@ -412,11 +412,8 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
       # to insert before the current layer
       if 'batch_input_shape' in kwargs:
         batch_input_shape = tuple(kwargs['batch_input_shape'])
-      elif 'input_shape' in kwargs:
-        if 'batch_size' in kwargs:
-          batch_size = kwargs['batch_size']
-        else:
-          batch_size = None
+      else:
+        batch_size = kwargs['batch_size'] if 'batch_size' in kwargs else None
         batch_input_shape = (batch_size,) + tuple(kwargs['input_shape'])
       self._batch_input_shape = batch_input_shape
 
@@ -801,20 +798,20 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
         output_shape)
 
   def _keras_tensor_symbolic_call(self, inputs, input_masks, args, kwargs):
-    if self.dynamic:
-      # We will use static shape inference to return symbolic tensors
-      # matching the specifications of the layer outputs.
-      # Since `self.dynamic` is True, we will never attempt to
-      # run the underlying TF graph (which is disconnected).
-      # TODO(fchollet): consider py_func as an alternative, which
-      # would enable us to run the underlying graph if needed.
-      input_signature = tf.nest.map_structure(
-          lambda x: tf.TensorSpec(shape=x.shape, dtype=x.dtype),
-          inputs)
-      output_signature = self.compute_output_signature(input_signature)
-      return tf.nest.map_structure(keras_tensor.KerasTensor, output_signature)
-    else:
+    if not self.dynamic:
       return self._infer_output_signature(inputs, args, kwargs, input_masks)
+
+    # We will use static shape inference to return symbolic tensors
+    # matching the specifications of the layer outputs.
+    # Since `self.dynamic` is True, we will never attempt to
+    # run the underlying TF graph (which is disconnected).
+    # TODO(fchollet): consider py_func as an alternative, which
+    # would enable us to run the underlying graph if needed.
+    input_signature = tf.nest.map_structure(
+        lambda x: tf.TensorSpec(shape=x.shape, dtype=x.dtype),
+        inputs)
+    output_signature = self.compute_output_signature(input_signature)
+    return tf.nest.map_structure(keras_tensor.KerasTensor, output_signature)
 
   def _infer_output_signature(self, inputs, args, kwargs, input_masks):
     """TODO(kaftan): Docstring."""
@@ -2162,8 +2159,7 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
     if not self._inbound_nodes:
       raise AttributeError('The layer has never been called '
                            'and thus has no defined input shape.')
-    all_input_shapes = set(
-        [str(node.input_shapes) for node in self._inbound_nodes])
+    all_input_shapes = {str(node.input_shapes) for node in self._inbound_nodes}
     if len(all_input_shapes) == 1:
       return self._inbound_nodes[0].input_shapes
     else:
@@ -2215,8 +2211,7 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
     if not self._inbound_nodes:
       raise AttributeError('The layer has never been called '
                            'and thus has no defined output shape.')
-    all_output_shapes = set(
-        [str(node.output_shapes) for node in self._inbound_nodes])
+    all_output_shapes = {str(node.output_shapes) for node in self._inbound_nodes}
     if len(all_output_shapes) == 1:
       return self._inbound_nodes[0].output_shapes
     else:
@@ -2850,7 +2845,7 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
       self._maybe_create_attribute('_self_tracked_trackables', [])
       # We need to check object identity to avoid de-duplicating empty
       # container types which compare equal.
-      if not any((layer is value for layer in self._self_tracked_trackables)):
+      if all(layer is not value for layer in self._self_tracked_trackables):
         self._self_tracked_trackables.append(value)
         if hasattr(value, '_use_resource_variables'):
           # Legacy layers (V1 tf.layers) must always use
@@ -2995,10 +2990,7 @@ class Layer(tf.Module, version_utils.LayerVersionSelector):
   @property
   @layer_utils.cached_per_instance
   def _call_fn_arg_positions(self):
-    call_fn_arg_positions = dict()
-    for pos, arg in enumerate(self._call_fn_args):
-      call_fn_arg_positions[arg] = pos
-    return call_fn_arg_positions
+    return {arg: pos for pos, arg in enumerate(self._call_fn_args)}
 
   @property
   @layer_utils.cached_per_instance
@@ -3290,25 +3282,24 @@ def _in_functional_construction_mode(layer, inputs, args, kwargs, input_list):  
     return any(
         isinstance(tensor, keras_tensor.KerasTensor)
         for tensor in tf.nest.flatten([inputs, args, kwargs]))
-  else:
-    if tf.executing_eagerly():
-      all_inputs_symbolic = all(
-          tf_utils.is_symbolic_tensor(t) for t in input_list)
-      if (base_layer_utils.is_subclassed(layer) and
-          any(tf_utils.is_symbolic_tensor(t) for t in tf.nest.flatten(
-              [inputs, args, kwargs])) and not all_inputs_symbolic):
-        raise ValueError('It appears you are trying to construct a '
-                         'functional model, but not all of the inputs in '
-                         'the first positional argument of your layer call '
-                         'are symbolic tensors. '
-                         '(Input objects, or the output of another layer) '
-                         'Functional models cannot correctly track custom '
-                         'layers unless all values in the first call argument '
-                         'are symbolic.')
-      return all_inputs_symbolic
-    else:
-      return (base_layer_utils.is_in_keras_graph() or
-              all(hasattr(t, '_keras_history') for t in input_list))
+  if not tf.executing_eagerly():
+    return (base_layer_utils.is_in_keras_graph() or
+            all(hasattr(t, '_keras_history') for t in input_list))
+
+  all_inputs_symbolic = all(
+      tf_utils.is_symbolic_tensor(t) for t in input_list)
+  if (base_layer_utils.is_subclassed(layer) and
+      any(tf_utils.is_symbolic_tensor(t) for t in tf.nest.flatten(
+          [inputs, args, kwargs])) and not all_inputs_symbolic):
+    raise ValueError('It appears you are trying to construct a '
+                     'functional model, but not all of the inputs in '
+                     'the first positional argument of your layer call '
+                     'are symbolic tensors. '
+                     '(Input objects, or the output of another layer) '
+                     'Functional models cannot correctly track custom '
+                     'layers unless all values in the first call argument '
+                     'are symbolic.')
+  return all_inputs_symbolic
 
 
 def _convert_numpy_or_python_types(x):

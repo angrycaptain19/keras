@@ -219,8 +219,10 @@ class LossesContainer(Container):
         loss_value *= loss_weight
         loss_metric_value *= loss_weight
 
-      if (loss_obj.reduction == losses_utils.ReductionV2.SUM_OVER_BATCH_SIZE or
-          loss_obj.reduction == losses_utils.ReductionV2.AUTO):
+      if loss_obj.reduction in [
+          losses_utils.ReductionV2.SUM_OVER_BATCH_SIZE,
+          losses_utils.ReductionV2.AUTO,
+      ]:
         loss_value = losses_utils.scale_loss_for_distribution(loss_value)
 
       loss_values.append(loss_value)
@@ -233,19 +235,18 @@ class LossesContainer(Container):
       loss_metric_values.append(reg_loss)
       loss_values.append(losses_utils.scale_loss_for_distribution(reg_loss))
 
-    if loss_values:
-      loss_metric_values = losses_utils.cast_losses_to_common_dtype(
-          loss_metric_values)
-      total_loss_metric_value = tf.add_n(loss_metric_values)
-      self._loss_metric.update_state(
-          total_loss_metric_value, sample_weight=batch_dim)
-
-      loss_values = losses_utils.cast_losses_to_common_dtype(loss_values)
-      total_loss = tf.add_n(loss_values)
-      return total_loss
-    else:
+    if not loss_values:
       # Ok for a model to have no compiled loss.
       return tf.zeros(shape=())
+
+    loss_metric_values = losses_utils.cast_losses_to_common_dtype(
+        loss_metric_values)
+    total_loss_metric_value = tf.add_n(loss_metric_values)
+    self._loss_metric.update_state(
+        total_loss_metric_value, sample_weight=batch_dim)
+
+    loss_values = losses_utils.cast_losses_to_common_dtype(loss_values)
+    return tf.add_n(loss_values)
 
   def reset_states(self):
     """Resets the state of loss metrics."""
@@ -638,19 +639,20 @@ def map_to_output_names(y_pred, output_names, struct):
                            isinstance(y_pred, (list, tuple)) and
                            not any(tf.nest.is_nested(y_p) for y_p in y_pred))
 
-  if (single_output or outputs_are_flat_list) and isinstance(struct, dict):
-    output_names = output_names or create_pseudo_output_names(y_pred)
-    struct = copy.copy(struct)
-    new_struct = [struct.pop(name, None) for name in output_names]
-    if struct:
-      raise ValueError('Found unexpected keys that do not correspond '
-                       'to any Model output: {}. Expected: {}'.format(
-                           struct.keys(), output_names))
-    if len(new_struct) == 1:
-      return new_struct[0]
-    return new_struct
-  else:
+  if (not single_output and not outputs_are_flat_list
+      or not isinstance(struct, dict)):
     return struct
+
+  output_names = output_names or create_pseudo_output_names(y_pred)
+  struct = copy.copy(struct)
+  new_struct = [struct.pop(name, None) for name in output_names]
+  if struct:
+    raise ValueError('Found unexpected keys that do not correspond '
+                     'to any Model output: {}. Expected: {}'.format(
+                         struct.keys(), output_names))
+  if len(new_struct) == 1:
+    return new_struct[0]
+  return new_struct
 
 
 def map_missing_dict_keys(y_pred, struct):
@@ -667,9 +669,8 @@ def match_dtype_and_rank(y_t, y_p, sw):
   """Match dtype and rank of predictions."""
   if y_t.shape.rank == 1 and y_p.shape.rank == 2:
     y_t = tf.expand_dims(y_t, axis=-1)
-  if sw is not None:
-    if sw.shape.rank == 1 and y_p.shape.rank == 2:
-      sw = tf.expand_dims(sw, axis=-1)
+  if sw is not None and sw.shape.rank == 1 and y_p.shape.rank == 2:
+    sw = tf.expand_dims(sw, axis=-1)
 
   # Dtype.
   # This is required mainly for custom loss functions which do not take care

@@ -90,7 +90,7 @@ def write_ckpt_to_h5(path_h5, path_ckpt, keras_model, use_ema=True):
           tf_block=tf_block,
           use_ema=use_ema,
           model_name_tf=model_name_tf)
-    elif any([x in w.name for x in ['stem', 'top', 'predictions', 'probs']]):
+    elif any(x in w.name for x in ['stem', 'top', 'predictions', 'probs']):
       tf_name = keras_name_to_tf_name_stem_top(
           w.name, use_ema=use_ema, model_name_tf=model_name_tf)
     elif 'normalization' in w.name:
@@ -107,7 +107,7 @@ def write_ckpt_to_h5(path_h5, path_ckpt, keras_model, use_ema=True):
         w.assign(w_tf)
         changed_weights += 1
     except ValueError as e:
-      if any([x in w.name for x in ['top', 'predictions', 'probs']]):
+      if any(x in w.name for x in ['top', 'predictions', 'probs']):
         warnings.warn('Fail to load top layer variable {}'
                       'from {} because of {}.'.format(w.name, tf_name, e))
       else:
@@ -177,11 +177,7 @@ def keras_name_to_tf_name_stem_top(keras_name,
   Raises:
     KeyError: if we cannot parse the keras_name.
   """
-  if use_ema:
-    ema = '/ExponentialMovingAverage'
-  else:
-    ema = ''
-
+  ema = '/ExponentialMovingAverage' if use_ema else ''
   stem_top_dict = {
       'probs/bias:0': '{}/head/dense/bias{}',
       'probs/kernel:0': '{}/head/dense/kernel{}',
@@ -322,11 +318,11 @@ def check_match(keras_block, tf_block, keras_weight_names, tf_weight_names,
           model_name_tf=model_name_tf)
       names_from_keras.add(y)
 
-  names_from_tf = set()
-  for x in tf_weight_names:
-    if tf_block in x and x.split('/')[1].endswith(tf_block):
-      names_from_tf.add(x)
-
+  names_from_tf = {
+      x
+      for x in tf_weight_names
+      if tf_block in x and x.split('/')[1].endswith(tf_block)
+  }
   names_missing = names_from_keras - names_from_tf
   if names_missing:
     raise ValueError('{} variables not found in checkpoint file: {}'.format(

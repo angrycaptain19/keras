@@ -297,13 +297,13 @@ class Metric(base_layer.Layer):
   @property
   def trainable_weights(self):
     # Overridden from Layer class to track submetric weights.
-    if self.trainable:
-      trainable_weights = self._trainable_weights
-      for m in self._metrics:
-        trainable_weights += m.trainable_weights
-      return self._dedup_weights(trainable_weights)
-    else:
+    if not self.trainable:
       return []
+
+    trainable_weights = self._trainable_weights
+    for m in self._metrics:
+      trainable_weights += m.trainable_weights
+    return self._dedup_weights(trainable_weights)
 
   @property
   def non_trainable_weights(self):
@@ -387,13 +387,12 @@ class Reduce(Metric):
       return update_total_op
 
     # Update `count` for reductions that require a denominator.
-    if self.reduction == metrics_utils.Reduction.SUM_OVER_BATCH_SIZE:
+    if (self.reduction == metrics_utils.Reduction.WEIGHTED_MEAN
+        and sample_weight is None
+        or self.reduction == metrics_utils.Reduction.SUM_OVER_BATCH_SIZE):
       num_values = tf.cast(tf.compat.v1.size(values), self._dtype)
     elif self.reduction == metrics_utils.Reduction.WEIGHTED_MEAN:
-      if sample_weight is None:
-        num_values = tf.cast(tf.compat.v1.size(values), self._dtype)
-      else:
-        num_values = tf.reduce_sum(sample_weight)
+      num_values = tf.reduce_sum(sample_weight)
     else:
       raise NotImplementedError(
           'reduction [%s] not implemented' % self.reduction)
@@ -963,10 +962,7 @@ class _ConfusionMatrixConditionCount(Metric):
         sample_weight=sample_weight)
 
   def result(self):
-    if len(self.thresholds) == 1:
-      result = self.accumulator[0]
-    else:
-      result = self.accumulator
+    result = self.accumulator[0] if len(self.thresholds) == 1 else self.accumulator
     return tf.convert_to_tensor(result)
 
   def reset_states(self):
@@ -2197,21 +2193,21 @@ class AUC(Metric):
         tf.maximum(self.true_positives[1:] + self.false_negatives[1:], 0),
         name='pr_auc_increment')
 
-    if self.multi_label:
-      by_label_auc = tf.reduce_sum(
-          pr_auc_increment, name=self.name + '_by_label', axis=0)
-      if self.label_weights is None:
-        # Evenly weighted average of the label AUCs.
-        return tf.reduce_mean(by_label_auc, name=self.name)
-      else:
-        # Weighted average of the label AUCs.
-        return tf.math.divide_no_nan(
-            tf.reduce_sum(
-                tf.multiply(by_label_auc, self.label_weights)),
-            tf.reduce_sum(self.label_weights),
-            name=self.name)
-    else:
+    if not self.multi_label:
       return tf.reduce_sum(pr_auc_increment, name='interpolate_pr_auc')
+
+    by_label_auc = tf.reduce_sum(
+        pr_auc_increment, name=self.name + '_by_label', axis=0)
+    if self.label_weights is None:
+      # Evenly weighted average of the label AUCs.
+      return tf.reduce_mean(by_label_auc, name=self.name)
+    else:
+      # Weighted average of the label AUCs.
+      return tf.math.divide_no_nan(
+          tf.reduce_sum(
+              tf.multiply(by_label_auc, self.label_weights)),
+          tf.reduce_sum(self.label_weights),
+          name=self.name)
 
   def result(self):
     if (self.curve == metrics_utils.AUCCurve.PR and
@@ -2244,25 +2240,25 @@ class AUC(Metric):
       heights = tf.maximum(y[:self.num_thresholds - 1], y[1:])
 
     # Sum up the areas of all the rectangles.
-    if self.multi_label:
-      riemann_terms = tf.multiply(x[:self.num_thresholds - 1] - x[1:],
-                                        heights)
-      by_label_auc = tf.reduce_sum(
-          riemann_terms, name=self.name + '_by_label', axis=0)
-
-      if self.label_weights is None:
-        # Unweighted average of the label AUCs.
-        return tf.reduce_mean(by_label_auc, name=self.name)
-      else:
-        # Weighted average of the label AUCs.
-        return tf.math.divide_no_nan(
-            tf.reduce_sum(
-                tf.multiply(by_label_auc, self.label_weights)),
-            tf.reduce_sum(self.label_weights),
-            name=self.name)
-    else:
+    if not self.multi_label:
       return tf.reduce_sum(
           tf.multiply(x[:self.num_thresholds - 1] - x[1:], heights),
+          name=self.name)
+
+    riemann_terms = tf.multiply(x[:self.num_thresholds - 1] - x[1:],
+                                      heights)
+    by_label_auc = tf.reduce_sum(
+        riemann_terms, name=self.name + '_by_label', axis=0)
+
+    if self.label_weights is None:
+      # Unweighted average of the label AUCs.
+      return tf.reduce_mean(by_label_auc, name=self.name)
+    else:
+      # Weighted average of the label AUCs.
+      return tf.math.divide_no_nan(
+          tf.reduce_sum(
+              tf.multiply(by_label_auc, self.label_weights)),
+          tf.reduce_sum(self.label_weights),
           name=self.name)
 
   def reset_states(self):
@@ -3253,9 +3249,10 @@ class SumOverBatchSizeMetricWrapper(SumOverBatchSize):
         matches, sample_weight=sample_weight)
 
   def get_config(self):
-    config = {}
-    for k, v in six.iteritems(self._fn_kwargs):
-      config[k] = K.eval(v) if is_tensor_or_variable(v) else v
+    config = {
+        k: K.eval(v) if is_tensor_or_variable(v) else v
+        for k, v in six.iteritems(self._fn_kwargs)
+    }
     base_config = super(SumOverBatchSizeMetricWrapper, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
 

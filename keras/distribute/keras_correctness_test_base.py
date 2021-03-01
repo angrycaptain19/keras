@@ -256,9 +256,7 @@ def fit_eval_and_predict(initial_weights,
       distribution=distribution,
       input_shapes=get_shapes(training_inputs['x']))
 
-  result = {}
-  result['training_history_1'] = model.fit(**training_inputs).history
-
+  result = {'training_history_1': model.fit(**training_inputs).history}
   if eval_inputs is not None:
     result['eval_result_1'] = model.evaluate(**eval_inputs)
 
@@ -394,7 +392,7 @@ class TestDistributionStrategyCorrectnessBase(tf.test.TestCase,
     x_train = np.random.randint(0, 2, num_samples)
     x_train = np.reshape(x_train, (num_samples, 1))
     y_train = x_train
-    return (x_train.astype('float32'), y_train.astype('float32'), None)
+    return y_train.astype('float32'), y_train.astype('float32'), None
 
   def get_data_with_partial_last_batch(self):
     raise NotImplementedError

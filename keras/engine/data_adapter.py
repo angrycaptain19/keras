@@ -228,9 +228,7 @@ class TensorLikeDataAdapter(DataAdapter):
       tensor_types = (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame)
 
     def _is_tensor(v):
-      if isinstance(v, tensor_types):
-        return True
-      return False
+      return isinstance(v, tensor_types)
 
     return all(_is_tensor(v) for v in flat_inputs)
 
@@ -550,9 +548,7 @@ class CompositeTensorDataAdapter(DataAdapter):
                              tf.data.Iterator))):
         return True
       # Support Scipy sparse tensors if scipy is installed
-      if scipy_sparse is not None and scipy_sparse.issparse(v):
-        return True
-      return False
+      return bool(scipy_sparse is not None and scipy_sparse.issparse(v))
 
     def _is_tensor_or_composite(v):
       if isinstance(v, (tf.Tensor, np.ndarray)):
@@ -754,12 +750,12 @@ class DatasetAdapter(DataAdapter):
                          "specify the number of steps to run.")
 
       size = tf.data.experimental.cardinality(self._dataset).numpy()
-      if size == tf.data.experimental.INFINITE_CARDINALITY and steps is None:
-        raise ValueError(
-            "When providing an infinite dataset, you must specify "
-            "the number of steps to run (if you did not intend to "
-            "create an infinite dataset, make sure to not call "
-            "`repeat()` on the dataset).")
+    if size == tf.data.experimental.INFINITE_CARDINALITY and steps is None:
+      raise ValueError(
+          "When providing an infinite dataset, you must specify "
+          "the number of steps to run (if you did not intend to "
+          "create an infinite dataset, make sure to not call "
+          "`repeat()` on the dataset).")
 
 
 class GeneratorDataAdapter(DataAdapter):
@@ -995,12 +991,12 @@ def select_data_adapter(x, y):
 def _type_name(x):
   """Generates a description of the type of an object."""
   if isinstance(x, dict):
-    key_types = set(_type_name(key) for key in x.keys())
-    val_types = set(_type_name(key) for key in x.values())
+    key_types = {_type_name(key) for key in x.keys()}
+    val_types = {_type_name(key) for key in x.values()}
     return "({} containing {} keys and {} values)".format(
         type(x), key_types, val_types)
   if isinstance(x, (list, tuple)):
-    types = set(_type_name(val) for val in x)
+    types = {_type_name(val) for val in x}
     return "({} containing values of types {})".format(
         type(x), types)
   return str(type(x))
@@ -1619,7 +1615,7 @@ def single_batch_iterator(strategy,
 
 
 def _check_data_cardinality(data):
-  num_samples = set(int(i.shape[0]) for i in tf.nest.flatten(data))
+  num_samples = {int(i.shape[0]) for i in tf.nest.flatten(data)}
   if len(num_samples) > 1:
     msg = "Data cardinality is ambiguous:\n"
     for label, single_data in zip(["x", "y", "sample_weight"], data):

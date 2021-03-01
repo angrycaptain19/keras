@@ -129,13 +129,10 @@ def ResNet(stack_fn,
       using a pretrained top layer.
   """
   global layers
-  if 'layers' in kwargs:
-    layers = kwargs.pop('layers')
-  else:
-    layers = VersionAwareLayers()
+  layers = kwargs.pop('layers') if 'layers' in kwargs else VersionAwareLayers()
   if kwargs:
     raise ValueError('Unknown argument(s): %s' % (kwargs,))
-  if not (weights in {'imagenet', None} or tf.io.gfile.exists(weights)):
+  if weights not in {'imagenet', None} and not tf.io.gfile.exists(weights):
     raise ValueError('The `weights` argument should be either '
                      '`None` (random initialization), `imagenet` '
                      '(pre-training on ImageNet), '
@@ -157,11 +154,11 @@ def ResNet(stack_fn,
   if input_tensor is None:
     img_input = layers.Input(shape=input_shape)
   else:
-    if not backend.is_keras_tensor(input_tensor):
-      img_input = layers.Input(tensor=input_tensor, shape=input_shape)
-    else:
+    if backend.is_keras_tensor(input_tensor):
       img_input = input_tensor
 
+    else:
+      img_input = layers.Input(tensor=input_tensor, shape=input_shape)
   bn_axis = 3 if backend.image_data_format() == 'channels_last' else 1
 
   x = layers.ZeroPadding2D(
@@ -196,11 +193,11 @@ def ResNet(stack_fn,
 
   # Ensure that the model takes into account
   # any potential predecessors of `input_tensor`.
-  if input_tensor is not None:
-    inputs = layer_utils.get_source_inputs(input_tensor)
-  else:
+  if input_tensor is None:
     inputs = img_input
 
+  else:
+    inputs = layer_utils.get_source_inputs(input_tensor)
   # Create model.
   model = training.Model(inputs, x, name=model_name)
 

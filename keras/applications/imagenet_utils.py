@@ -200,10 +200,7 @@ def _preprocess_numpy_input(x, data_format, mode):
   else:
     if data_format == 'channels_first':
       # 'RGB'->'BGR'
-      if x.ndim == 3:
-        x = x[::-1, ...]
-      else:
-        x = x[:, ::-1, ...]
+      x = x[::-1, ...] if x.ndim == 3 else x[:, ::-1, ...]
     else:
       # 'RGB'->'BGR'
       x = x[..., ::-1]
@@ -270,10 +267,7 @@ def _preprocess_symbolic_input(x, data_format, mode):
   else:
     if data_format == 'channels_first':
       # 'RGB'->'BGR'
-      if backend.ndim(x) == 3:
-        x = x[::-1, ...]
-      else:
-        x = x[:, ::-1, ...]
+      x = x[::-1, ...] if backend.ndim(x) == 3 else x[:, ::-1, ...]
     else:
       # 'RGB'->'BGR'
       x = x[..., ::-1]
@@ -341,11 +335,10 @@ def obtain_input_shape(input_shape,
     else:
       default_shape = (default_size, default_size, 3)
   if weights == 'imagenet' and require_flatten:
-    if input_shape is not None:
-      if input_shape != default_shape:
-        raise ValueError('When setting `include_top=True` '
-                         'and loading `imagenet` weights, '
-                         '`input_shape` should be ' + str(default_shape) + '.')
+    if input_shape is not None and input_shape != default_shape:
+      raise ValueError('When setting `include_top=True` '
+                       'and loading `imagenet` weights, '
+                       '`input_shape` should be ' + str(default_shape) + '.')
     return default_shape
   if input_shape:
     if data_format == 'channels_first':
@@ -380,11 +373,10 @@ def obtain_input_shape(input_shape,
         input_shape = (3, None, None)
       else:
         input_shape = (None, None, 3)
-  if require_flatten:
-    if None in input_shape:
-      raise ValueError('If `include_top` is True, '
-                       'you should specify a static `input_shape`. '
-                       'Got `input_shape=' + str(input_shape) + '`')
+  if require_flatten and None in input_shape:
+    raise ValueError('If `include_top` is True, '
+                     'you should specify a static `input_shape`. '
+                     'Got `input_shape=' + str(input_shape) + '`')
   return input_shape
 
 

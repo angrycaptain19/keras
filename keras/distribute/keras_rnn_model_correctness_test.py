@@ -72,12 +72,12 @@ class DistributionStrategyGruModelCorrectnessTest(
     _DistributionStrategyRnnModelCorrectnessTest):
 
   def _get_layer_class(self):
-    if tf.__internal__.tf2.enabled():
-      if not tf.executing_eagerly():
-        self.skipTest("GRU v2 and legacy graph mode don't work together.")
-      return rnn_v2.GRU
-    else:
+    if not tf.__internal__.tf2.enabled():
       return rnn_v1.GRU
+
+    if not tf.executing_eagerly():
+      self.skipTest("GRU v2 and legacy graph mode don't work together.")
+    return rnn_v2.GRU
 
   @tf.__internal__.distribute.combinations.generate(
       keras_correctness_test_base.test_combinations_for_embedding_model() +
@@ -93,12 +93,12 @@ class DistributionStrategyLstmModelCorrectnessTest(
     _DistributionStrategyRnnModelCorrectnessTest):
 
   def _get_layer_class(self):
-    if tf.__internal__.tf2.enabled():
-      if not tf.executing_eagerly():
-        self.skipTest("LSTM v2 and legacy graph mode don't work together.")
-      return rnn_v2.LSTM
-    else:
+    if not tf.__internal__.tf2.enabled():
       return rnn_v1.LSTM
+
+    if not tf.executing_eagerly():
+      self.skipTest("LSTM v2 and legacy graph mode don't work together.")
+    return rnn_v2.LSTM
 
   @tf.__internal__.distribute.combinations.generate(
       keras_correctness_test_base.test_combinations_for_embedding_model() +

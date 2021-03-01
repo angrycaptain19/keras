@@ -127,7 +127,8 @@ def make_variable(name,
       collections=collections,
       synchronization=synchronization,
       aggregation=aggregation,
-      shape=variable_shape if variable_shape else None)
+      shape=variable_shape or None,
+  )
 
 
 def collect_previous_mask(input_tensors):
@@ -343,10 +344,8 @@ def is_in_tf_function():
     return False
   # Check for a v1 `wrap_function` FuncGraph.
   graph = tf.compat.v1.get_default_graph()
-  if (getattr(graph, 'name', False) and
-      graph.name.startswith('wrapped_function')):
-    return False
-  return True
+  return not getattr(graph, 'name',
+                     False) or not graph.name.startswith('wrapped_function')
 
 
 def uses_keras_history(tensors):
@@ -847,9 +846,10 @@ class TrackableWeightHandler(object):
     return self._getter()
 
   def _set_weights_v1(self, weights):
-    feed_dict = {}
-    for idx, tensor in enumerate(weights):
-      feed_dict[self._placeholder_tensors[idx]] = tensor
+    feed_dict = {
+        self._placeholder_tensors[idx]: tensor
+        for idx, tensor in enumerate(weights)
+    }
     backend.get_session().run(self._assign_op, feed_dict)
 
 

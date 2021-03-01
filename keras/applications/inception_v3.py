@@ -110,7 +110,7 @@ def InceptionV3(
     ValueError: if `classifier_activation` is not `softmax` or `None` when
       using a pretrained top layer.
   """
-  if not (weights in {'imagenet', None} or tf.io.gfile.exists(weights)):
+  if weights not in {'imagenet', None} and not tf.io.gfile.exists(weights):
     raise ValueError('The `weights` argument should be either '
                      '`None` (random initialization), `imagenet` '
                      '(pre-training on ImageNet), '
@@ -132,16 +132,12 @@ def InceptionV3(
   if input_tensor is None:
     img_input = layers.Input(shape=input_shape)
   else:
-    if not backend.is_keras_tensor(input_tensor):
-      img_input = layers.Input(tensor=input_tensor, shape=input_shape)
-    else:
+    if backend.is_keras_tensor(input_tensor):
       img_input = input_tensor
 
-  if backend.image_data_format() == 'channels_first':
-    channel_axis = 1
-  else:
-    channel_axis = 3
-
+    else:
+      img_input = layers.Input(tensor=input_tensor, shape=input_shape)
+  channel_axis = 1 if backend.image_data_format() == 'channels_first' else 3
   x = conv2d_bn(img_input, 32, 3, 3, strides=(2, 2), padding='valid')
   x = conv2d_bn(x, 32, 3, 3, padding='valid')
   x = conv2d_bn(x, 64, 3, 3)
@@ -333,10 +329,10 @@ def InceptionV3(
 
   # Ensure that the model takes into account
   # any potential predecessors of `input_tensor`.
-  if input_tensor is not None:
-    inputs = layer_utils.get_source_inputs(input_tensor)
-  else:
+  if input_tensor is None:
     inputs = img_input
+  else:
+    inputs = layer_utils.get_source_inputs(input_tensor)
   # Create model.
   model = training.Model(inputs, x, name='inception_v3')
 
@@ -390,10 +386,7 @@ def conv2d_bn(x,
   else:
     bn_name = None
     conv_name = None
-  if backend.image_data_format() == 'channels_first':
-    bn_axis = 1
-  else:
-    bn_axis = 3
+  bn_axis = 1 if backend.image_data_format() == 'channels_first' else 3
   x = layers.Conv2D(
       filters, (num_row, num_col),
       strides=strides,

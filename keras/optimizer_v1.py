@@ -201,11 +201,7 @@ class SGD(Optimizer):
       v = self.momentum * m - lr * g  # velocity
       self.updates.append(tf.compat.v1.assign(m, v))
 
-      if self.nesterov:
-        new_p = p + self.momentum * v - lr * g
-      else:
-        new_p = p + v
-
+      new_p = p + self.momentum * v - lr * g if self.nesterov else p + v
       # Apply constraints.
       if getattr(p, 'constraint', None) is not None:
         new_p = p.constraint(new_p)
